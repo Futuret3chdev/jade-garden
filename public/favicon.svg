@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Jade Garden">
+  <rect width="32" height="32" rx="7" fill="#071612"/>
+  <rect x="6.25" y="4.25" width="19.5" height="23.5" rx="3" fill="#f6f0df" stroke="#e8c87a" stroke-width="1.75"/>
+  <circle cx="16" cy="16" r="4.25" fill="#1f6b56"/>
+</svg>
