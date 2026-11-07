@@ -876,12 +876,21 @@
 }
 
 .garden-foot a {
-  display: inline-block;
-  padding: 0.35rem 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0.75rem 0.35rem 0.4rem;
   border-radius: 999px;
   color: var(--color-gold);
   text-underline-offset: 3px;
   background: color-mix(in srgb, #06141a 82%, transparent);
+}
+
+.t3x-mark {
+  width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 0.4rem;
+  object-fit: cover;
 }
 
 .nick-card {

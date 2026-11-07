@@ -891,7 +891,8 @@ export function Garden() {
 
         <footer className="garden-foot">
           <a href="https://t3x.futuret3ch.com.au" target="_blank" rel="noopener">
-            Created by futuret3ch
+            <img src="/t3x-mark.png" alt="" className="t3x-mark" />
+            <span>Created by futuret3ch</span>
           </a>
         </footer>
       </main>

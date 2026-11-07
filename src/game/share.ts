@@ -1,7 +1,7 @@
 export const SITE = "https://jade-garden-n8lk.vercel.app";
 
 export const X_POST =
-  "Jade Garden — mahjong under a moonlit pond. Match the free tiles. If the path closes, leave your name on the board.";
+  "Jade Garden — mahjong under a moonlit pond, by futuret3ch. Match the free tiles. If the path closes, leave your name on the board.";
 
 export function xIntent(line?: string) {
   const text = line ? `${line}\n\n${X_POST}` : X_POST;
