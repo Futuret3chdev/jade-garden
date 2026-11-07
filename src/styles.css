@@ -446,11 +446,25 @@
 
 .garden-sky.is-immersive .standings,
 .garden-sky.is-immersive .rules-wrap,
-.garden-sky.is-immersive .garden-foot,
 .garden-sky:fullscreen .standings,
-.garden-sky:fullscreen .rules-wrap,
-.garden-sky:fullscreen .garden-foot {
+.garden-sky:fullscreen .rules-wrap {
   display: none;
+}
+
+.garden-sky.is-immersive .garden-foot,
+.garden-sky:fullscreen .garden-foot {
+  display: flex;
+  position: absolute;
+  z-index: 8;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: calc(4.9rem + env(safe-area-inset-bottom));
+  margin: 0;
+  padding: 0;
+  pointer-events: auto;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
 }
 
 .garden-dock {
@@ -869,6 +883,10 @@
 .garden-foot {
   margin-top: 1.1rem;
   padding-top: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.28rem;
   text-align: center;
   font-size: 0.88rem;
   color: var(--color-ivory);
@@ -891,6 +909,13 @@
   height: 1.45rem;
   border-radius: 0.4rem;
   object-fit: cover;
+}
+
+.foot-legal {
+  margin: 0;
+  font-size: 0.68rem;
+  letter-spacing: 0.04em;
+  color: var(--color-ivory);
 }
 
 .nick-card {

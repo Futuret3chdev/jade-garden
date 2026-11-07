@@ -894,6 +894,7 @@ export function Garden() {
             <img src="/t3x-mark.png" alt="" className="t3x-mark" />
             <span>Created by futuret3ch</span>
           </a>
+          <p className="foot-legal">Intellectual property. Trademarked 2026.</p>
         </footer>
       </main>
       {trailerOpen && (
