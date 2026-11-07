@@ -614,7 +614,7 @@ export function Garden() {
             aria-label="Jade Garden trailer"
             onClick={(event) => event.stopPropagation()}
           >
-            <video src="/trailer.mp4" controls autoPlay playsInline />
+            <video src="/trailer.mp4?v=2" controls autoPlay playsInline />
             <div className="trailer-bar">
               <p>A minute in the garden</p>
               <button type="button" className="garden-btn" onClick={() => setTrailerOpen(false)}>
