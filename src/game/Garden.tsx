@@ -26,6 +26,8 @@ import {
 } from "@/game/logic";
 import { BOARD_H, BOARD_W, TILE_H, TILE_W, tilePosition } from "@/game/metrics";
 import { readSave, writeSave } from "@/game/save";
+import { NickGate, Standings } from "@/game/Standings";
+import { xIntent } from "@/game/share";
 
 type Snap = { tiles: Tile[]; moves: number; mispicks: number; clears: number };
 type Ghost = { key: string; face: number; left: number; top: number; z: number; spin: number };
@@ -55,6 +57,9 @@ export function Garden() {
   const [shake, setShake] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [posted, setPosted] = useState(false);
+  const [boardTick, setBoardTick] = useState(0);
+  const [signedName, setSignedName] = useState("");
 
   const stageRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -190,6 +195,13 @@ export function Garden() {
 
   const remaining = tiles ? tiles.filter((t) => !t.removed).length : null;
   const won = remaining === 0;
+  const stuck = !!tiles && !won && freePairs(tiles).length === 0;
+
+  function onPosted(nick: string) {
+    setPosted(true);
+    setSignedName(nick);
+    setBoardTick((tick) => tick + 1);
+  }
 
   const bounds = useMemo(() => {
     let w = BOARD_W;
@@ -381,6 +393,8 @@ export function Garden() {
     setMoves(0);
     setMispicks(0);
     setMessage("Original deal restored. A fresh start.");
+    setPosted(false);
+    setSignedName("");
     play("ui");
   }
 
@@ -395,6 +409,8 @@ export function Garden() {
     setMoves(0);
     setMispicks(0);
     setMessage("A fresh, solvable deal. Take your time.");
+    setPosted(false);
+    setSignedName("");
     play("ui");
   }
 
@@ -514,6 +530,24 @@ export function Garden() {
           {message}
         </p>
 
+        {stuck && !posted ? (
+          <NickGate
+            tilesLeft={remaining ?? 0}
+            moves={moves}
+            mispicks={mispicks}
+            heading="The path closed"
+            onPosted={onPosted}
+          />
+        ) : null}
+        {stuck && posted ? (
+          <p className="nick-done">
+            {signedName} is on the board.{" "}
+            <a href={xIntent(`${signedName} left ${remaining} tiles in Jade Garden.`)} target="_blank" rel="noopener noreferrer">
+              Tell X
+            </a>
+          </p>
+        ) : null}
+
         <section ref={stageRef} className="garden-stage" aria-label="Mahjong tile board">
           <div className="garden-scroll">
             <div style={{ width: bounds.w * scale, height: bounds.h * scale }}>
@@ -613,6 +647,16 @@ export function Garden() {
                   {mispicks ? `, with ${mispicks} mis-picks along the way` : ", without a mis-pick"}. The moon can
                   have the pond back.
                 </p>
+                {posted ? (
+                  <p className="nick-done">
+                    {signedName} cleared the garden.{" "}
+                    <a href={xIntent(`${signedName} cleared Jade Garden in ${moves} moves.`)} target="_blank" rel="noopener noreferrer">
+                      Tell X
+                    </a>
+                  </p>
+                ) : (
+                  <NickGate tilesLeft={0} moves={moves} mispicks={mispicks} heading="Leave your name" onPosted={onPosted} />
+                )}
                 <button type="button" className="garden-btn is-primary mt-4" onClick={onFresh}>
                   New game
                 </button>
@@ -621,6 +665,8 @@ export function Garden() {
           )}
         </section>
         {overflows && <p className="scroll-hint">Swipe sideways if a tile sits past the edge.</p>}
+
+        <Standings refresh={boardTick} />
 
         <div className="rules-wrap">
           <button
