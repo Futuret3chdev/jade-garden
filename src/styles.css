@@ -307,6 +307,152 @@
   letter-spacing: 0.03em;
 }
 
+.garden-sky.is-immersive,
+.garden-sky:fullscreen {
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow: hidden;
+}
+
+.garden-sky.is-immersive:not(:fullscreen) {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  height: 100dvh;
+  min-height: 100dvh;
+}
+
+.garden-sky.is-immersive main,
+.garden-sky:fullscreen main {
+  position: absolute;
+  inset: 0;
+  max-width: none;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+.garden-sky.is-immersive .garden-chrome,
+.garden-sky:fullscreen .garden-chrome {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.garden-sky.is-immersive .garden-chrome-top,
+.garden-sky.is-immersive .garden-dock,
+.garden-sky.is-immersive .garden-status,
+.garden-sky.is-immersive .resign-card,
+.garden-sky.is-immersive .nick-card,
+.garden-sky.is-immersive .nick-done,
+.garden-sky:fullscreen .garden-chrome-top,
+.garden-sky:fullscreen .garden-dock,
+.garden-sky:fullscreen .garden-status,
+.garden-sky:fullscreen .resign-card,
+.garden-sky:fullscreen .nick-card,
+.garden-sky:fullscreen .nick-done {
+  pointer-events: auto;
+}
+
+.garden-sky.is-immersive .garden-chrome-top,
+.garden-sky:fullscreen .garden-chrome-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 0.45rem 0.65rem 0;
+}
+
+.garden-sky.is-immersive .eyebrow,
+.garden-sky.is-immersive .lede,
+.garden-sky:fullscreen .eyebrow,
+.garden-sky:fullscreen .lede {
+  display: none;
+}
+
+.garden-sky.is-immersive .garden-title,
+.garden-sky:fullscreen .garden-title {
+  font-size: 1.45rem;
+}
+
+.garden-sky.is-immersive .mode-row,
+.garden-sky:fullscreen .mode-row {
+  margin-top: 0.4rem;
+}
+
+.garden-sky.is-immersive .mode-btn,
+.garden-sky:fullscreen .mode-btn {
+  min-height: 34px;
+  font-size: 0.72rem;
+}
+
+.garden-sky.is-immersive .garden-dock,
+.garden-sky:fullscreen .garden-dock {
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: max(0.4rem, env(safe-area-inset-bottom));
+  max-width: none;
+  margin: 0;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.garden-sky.is-immersive .dock-btn,
+.garden-sky:fullscreen .dock-btn {
+  min-height: 2.7rem;
+  font-size: 0.58rem;
+}
+
+.garden-sky.is-immersive .garden-status,
+.garden-sky:fullscreen .garden-status {
+  position: absolute;
+  top: 6.6rem;
+  left: 0.7rem;
+  right: 0.7rem;
+  margin: 0;
+}
+
+.garden-sky.is-immersive .resign-card,
+.garden-sky.is-immersive .nick-card,
+.garden-sky.is-immersive .nick-done,
+.garden-sky:fullscreen .resign-card,
+.garden-sky:fullscreen .nick-card,
+.garden-sky:fullscreen .nick-done {
+  position: absolute;
+  top: 7.4rem;
+  left: 0.7rem;
+  right: 0.7rem;
+  z-index: 8;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.garden-sky.is-immersive .garden-stage,
+.garden-sky:fullscreen .garden-stage {
+  position: absolute;
+  inset: 0;
+}
+
+.garden-sky.is-immersive .garden-scroll,
+.garden-sky:fullscreen .garden-scroll {
+  height: 100%;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.garden-sky.is-immersive .standings,
+.garden-sky.is-immersive .rules-wrap,
+.garden-sky.is-immersive .garden-foot,
+.garden-sky:fullscreen .standings,
+.garden-sky:fullscreen .rules-wrap,
+.garden-sky:fullscreen .garden-foot {
+  display: none;
+}
+
 .garden-dock {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));

@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
+  Maximize2,
+  Minimize2,
   Play,
   Plus,
   RotateCcw,
@@ -8,8 +10,6 @@ import {
   Undo2,
   Volume2,
   VolumeX,
-  ZoomIn,
-  ZoomOut,
 } from "lucide-react";
 import gardenUrl from "@/assets/garden.jpg";
 import { play, resumeAudio, setSoundEnabled, unlockAudio } from "@/game/audio";
@@ -49,8 +49,8 @@ export function Garden() {
   const [clears, setClears] = useState(0);
   const [sound, setSound] = useState(true);
   const [ready, setReady] = useState(false);
-  const [zoom, setZoom] = useState<"fit" | "play">("fit");
-  const [stageWidth, setStageWidth] = useState(0);
+  const [immersive, setImmersive] = useState(false);
+  const [stageSize, setStageSize] = useState({ w: 0, h: 0 });
   const [reduceMotion, setReduceMotion] = useState(false);
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [sparks, setSparks] = useState<Spark[]>([]);
@@ -67,6 +67,7 @@ export function Garden() {
   const startRef = useRef<number | null>(null);
 
   const stageRef = useRef<HTMLDivElement>(null);
+  const skyRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const focusFree = useRef(false);
   const sparkSeq = useRef(1);
@@ -106,12 +107,12 @@ export function Garden() {
   useLayoutEffect(() => {
     const el = stageRef.current;
     if (!el) return;
-    const apply = () => setStageWidth(el.clientWidth);
+    const apply = () => setStageSize({ w: el.clientWidth, h: el.clientHeight });
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [immersive]);
 
   useEffect(() => {
     const saved = readSave();
@@ -153,8 +154,6 @@ export function Garden() {
     }
     setReady(true);
 
-    const coarse = window.matchMedia("(pointer: coarse)").matches;
-    if (coarse) setZoom("play");
     const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const syncMotion = () => setReduceMotion(motion.matches);
     syncMotion();
@@ -254,9 +253,9 @@ export function Garden() {
     return { w, h };
   }, [tiles]);
 
-  const fit = stageWidth > 0 ? stageWidth / bounds.w : 1;
-  const scale = Math.min(1, zoom === "play" ? Math.max(fit, Math.min(1, 50 / TILE_W)) : fit);
-  const overflows = stageWidth > 0 && bounds.w * scale > stageWidth + 8;
+  const fitW = stageSize.w > 0 ? stageSize.w / bounds.w : 1;
+  const fitH = stageSize.h > 0 ? stageSize.h / bounds.h : fitW;
+  const scale = immersive ? Math.min(fitW, fitH) : Math.min(1, fitW);
 
   function later(fn: () => void, ms: number) {
     const id = window.setTimeout(fn, ms);
@@ -551,8 +550,42 @@ export function Garden() {
     if (next) play("ui");
   }
 
+  useEffect(() => {
+    const sync = () => setImmersive(document.fullscreenElement === skyRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!immersive || document.fullscreenElement) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setImmersive(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [immersive]);
+
+  async function toggleFull() {
+    const el = skyRef.current;
+    if (!el) return;
+    unlockAudio();
+    if (document.fullscreenElement === el) {
+      await document.exitFullscreen();
+      return;
+    }
+    if (immersive) {
+      setImmersive(false);
+      return;
+    }
+    try {
+      await el.requestFullscreen();
+    } catch {
+      setImmersive(true);
+    }
+  }
+
   return (
-    <div className="garden-sky">
+    <div ref={skyRef} className={immersive ? "garden-sky is-immersive" : "garden-sky"}>
       <img src={gardenUrl} alt="" className="garden-photo" />
       <div className="garden-shade" />
       <div className="garden-motes" aria-hidden="true" />
@@ -568,6 +601,8 @@ export function Garden() {
       </div>
 
       <main className="relative mx-auto w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-7">
+        <div className="garden-chrome">
+        <div className="garden-chrome-top">
         <header className="garden-head">
           <div className="min-w-0">
             <p className="eyebrow">A quiet moment of play</p>
@@ -610,6 +645,7 @@ export function Garden() {
             </button>
           ))}
         </div>
+        </div>
 
         <nav className="garden-dock" aria-label="Game controls">
           <button type="button" className="dock-btn" onClick={onHint} disabled={!tiles || won || timeUp || !!leave}>
@@ -632,9 +668,9 @@ export function Garden() {
             <Plus aria-hidden className="dock-ico" />
             <span>New</span>
           </button>
-          <button type="button" className="dock-btn" onClick={() => setZoom((z) => (z === "fit" ? "play" : "fit"))}>
-            {zoom === "fit" ? <ZoomIn aria-hidden className="dock-ico" /> : <ZoomOut aria-hidden className="dock-ico" />}
-            <span>{zoom === "fit" ? "Bigger" : "Fit"}</span>
+          <button type="button" className="dock-btn" onClick={toggleFull} aria-pressed={immersive}>
+            {immersive ? <Minimize2 aria-hidden className="dock-ico" /> : <Maximize2 aria-hidden className="dock-ico" />}
+            <span>{immersive ? "Exit" : "Full"}</span>
           </button>
           <button type="button" className="dock-btn" onClick={toggleSound} aria-pressed={sound}>
             {sound ? <Volume2 aria-hidden className="dock-ico" /> : <VolumeX aria-hidden className="dock-ico" />}
@@ -645,7 +681,6 @@ export function Garden() {
             <span>Trailer</span>
           </button>
         </nav>
-
         <p id="status" className="garden-status" role="status" aria-live="polite">
           {message}
         </p>
@@ -686,6 +721,7 @@ export function Garden() {
             </a>
           </p>
         ) : null}
+        </div>
 
         <section ref={stageRef} className="garden-stage" aria-label="Mahjong tile board">
           <div className="garden-scroll">
@@ -819,7 +855,6 @@ export function Garden() {
             </div>
           )}
         </section>
-        {overflows && <p className="scroll-hint">Swipe sideways if a tile sits past the edge.</p>}
 
         <Standings refresh={boardTick} mode={mode} />
 
@@ -848,7 +883,7 @@ export function Garden() {
               <p>
                 <strong>Keys</strong>
                 Tab, Enter, or Space selects a free tile. Arrows move across open tiles. H hint, U undo, S shuffle, R
-                restart, N new game.
+                restart, N new game. Full fills the screen and lays the menu over the board.
               </p>
             </div>
           ) : null}
