@@ -1,13 +1,11 @@
 import type { CSSProperties } from "react";
 
 const FISH = [
-  { id: "a", kind: "orange", lane: "6%", dur: "27s", delay: "-6s", size: "124px", left: "8%" },
-  { id: "b", kind: "white", lane: "22%", dur: "36s", delay: "-20s", size: "78px", left: "34%" },
-  { id: "c", kind: "calico", lane: "40%", dur: "23s", delay: "-11s", size: "108px", left: "62%" },
-  { id: "d", kind: "orange", lane: "58%", dur: "32s", delay: "-24s", size: "68px", left: "18%" },
-  { id: "e", kind: "white", lane: "14%", dur: "41s", delay: "-31s", size: "56px", left: "78%" },
-  { id: "f", kind: "calico", lane: "74%", dur: "26s", delay: "-8s", size: "96px", left: "46%" },
-  { id: "g", kind: "orange", lane: "86%", dur: "30s", delay: "-16s", size: "84px", left: "86%" },
+  { id: "a", kind: "orange", lap: "lap-a", dur: "32s", delay: "-4s", size: "92px", left: "14%", top: "58%" },
+  { id: "b", kind: "white", lap: "lap-b", dur: "26s", delay: "-12s", size: "70px", left: "68%", top: "28%" },
+  { id: "c", kind: "calico", lap: "lap-c", dur: "36s", delay: "-20s", size: "84px", left: "28%", top: "74%" },
+  { id: "d", kind: "orange", lap: "lap-b", dur: "30s", delay: "-8s", size: "60px", left: "76%", top: "66%" },
+  { id: "e", kind: "calico", lap: "lap-a", dur: "40s", delay: "-28s", size: "74px", left: "46%", top: "24%" },
 ] as const;
 
 function Koi({ kind }: { kind: (typeof FISH)[number]["kind"] }) {
@@ -38,15 +36,18 @@ export function Pond() {
   return (
     <div className="pond" aria-hidden="true">
       <div className="pond-glint" />
+      <span className="pond-ripple" style={{ left: "22%", top: "40%" }} />
+      <span className="pond-ripple is-late" style={{ left: "70%", top: "62%" }} />
       {FISH.map((fish) => (
         <span
           key={fish.id}
-          className={`koi koi-${fish.kind}`}
+          className={`koi koi-${fish.kind} ${fish.lap}`}
           style={
             {
-              top: fish.lane,
+              left: fish.left,
+              top: fish.top,
               width: fish.size,
-              "--rest": fish.left,
+              "--size": fish.size,
               animationDuration: fish.dur,
               animationDelay: fish.delay,
             } as CSSProperties

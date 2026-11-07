@@ -54,6 +54,7 @@ export function Garden() {
   const [rings, setRings] = useState<Ring[]>([]);
   const [shake, setShake] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -62,6 +63,14 @@ export function Garden() {
   const timers = useRef<number[]>([]);
   const reduceRef = useRef(false);
   reduceRef.current = reduceMotion;
+
+  function toggleHelp() {
+    setHelpOpen((open) => {
+      const next = !open;
+      window.localStorage.setItem("jade-help", next ? "open" : "closed");
+      return next;
+    });
+  }
 
   const api = useRef({
     hint: () => {},
@@ -79,6 +88,10 @@ export function Garden() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [trailerOpen]);
+
+  useEffect(() => {
+    setHelpOpen(window.localStorage.getItem("jade-help") === "open");
+  }, []);
 
   useLayoutEffect(() => {
     const el = stageRef.current;
@@ -507,11 +520,11 @@ export function Garden() {
               <div className={shake && !reduceMotion ? "mj-tray is-lit" : "mj-tray"} style={{ width: bounds.w, height: bounds.h, transform: `scale(${scale})` }}>
                 <div className="mj-perspective">
                   <div className="mj-tilt">
-                <div
-                  ref={boardRef}
-                  className={shake && !reduceMotion ? "mj-plane mj-shake" : "mj-plane"}
-                  onKeyDown={onBoardKey}
-                >
+                    <div
+                      ref={boardRef}
+                      className={shake && !reduceMotion ? "mj-plane mj-shake" : "mj-plane"}
+                      onKeyDown={onBoardKey}
+                    >
                   {!tiles && (
                     <p className="absolute inset-0 grid place-items-center text-mist">Laying the tiles…</p>
                   )}
@@ -607,24 +620,36 @@ export function Garden() {
             </div>
           )}
         </section>
-        {overflows && <p className="scroll-hint">Swipe across the lacquer if the outer tiles sit past the edge.</p>}
+        {overflows && <p className="scroll-hint">Swipe sideways if a tile sits past the edge.</p>}
 
-        <div className="rules">
-          <p>
-            <strong>How to play</strong>
-            Match two identical free tiles. A tile is free when nothing sits above it and its left or right side is
-            open. Darker tiles are blocked.
-          </p>
-          <p>
-            <strong>Take your time</strong>
-            Hint outlines a pair. Shuffle keeps the tiles you still have and guarantees a way through. Restart restores
-            the original deal. Undo lifts the last match.
-          </p>
-          <p>
-            <strong>Keys</strong>
-            Tab, Enter, or Space selects a free tile. Arrows move across open tiles. H hint, U undo, S shuffle, R
-            restart, N new game.
-          </p>
+        <div className="rules-wrap">
+          <button
+            type="button"
+            className="rules-toggle"
+            aria-expanded={helpOpen}
+            onClick={toggleHelp}
+          >
+            {helpOpen ? "Hide instructions" : "How to play"}
+          </button>
+          {helpOpen ? (
+            <div className="rules">
+              <p>
+                <strong>How to play</strong>
+                Match two identical free tiles. A tile is free when nothing sits above it and its left or right side is
+                open. Darker tiles are blocked.
+              </p>
+              <p>
+                <strong>Take your time</strong>
+                Hint outlines a pair. Shuffle keeps the tiles you still have and guarantees a way through. Restart
+                restores the original deal. Undo lifts the last match.
+              </p>
+              <p>
+                <strong>Keys</strong>
+                Tab, Enter, or Space selects a free tile. Arrows move across open tiles. H hint, U undo, S shuffle, R
+                restart, N new game.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <footer className="garden-foot">
