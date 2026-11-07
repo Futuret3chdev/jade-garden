@@ -145,8 +145,13 @@ export function NickGate({
     try {
       await sendScore({ data: { nick, tilesLeft, moves, mispicks, elapsedSec, mode } });
       onPosted(nick.trim());
-    } catch {
-      setError("That name did not land. Try a shorter one.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "";
+      setError(
+        message.startsWith("Use a short") || message.startsWith("That ")
+          ? message
+          : "The board could not be reached. Try again.",
+      );
     } finally {
       setBusy(false);
     }

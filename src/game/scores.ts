@@ -1,5 +1,4 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getSql } from "@/lib/db";
 import { challengeLimit, isPlayMode, type PlayMode } from "@/game/modes";
 
 export type Score = {
@@ -25,6 +24,15 @@ type ScoreRow = {
 };
 
 const NICK = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{0,15}$/u;
+const MODES: PlayMode[] = ["normal", "timed", "m20", "m10", "m5"];
+const MODE_KEY: Record<PlayMode, string> = {
+  normal: "n",
+  timed: "t",
+  m20: "20",
+  m10: "10",
+  m5: "5",
+};
+const STORE = "jgb8e1c4a90d";
 
 function cleanNick(value: unknown) {
   if (typeof value !== "string") throw new Error("Use a short name.");
@@ -42,6 +50,14 @@ function cleanCount(value: unknown, label: string, max = 999) {
   return value;
 }
 
+function emptyBoards(): Boards {
+  return { normal: [], timed: [], m20: [], m10: [], m5: [] };
+}
+
+function byRank(a: Score, b: Score) {
+  return a.tilesLeft - b.tilesLeft || a.elapsedSec - b.elapsedSec || a.mispicks - b.mispicks || a.moves - b.moves;
+}
+
 function mapRow(row: ScoreRow): Score | null {
   if (!isPlayMode(row.mode)) return null;
   return {
@@ -55,36 +71,108 @@ function mapRow(row: ScoreRow): Score | null {
   };
 }
 
-async function boards(): Promise<Boards> {
+async function sqlBoards(): Promise<Boards> {
+  const { getSql } = await import("@/lib/db");
   const sql = await getSql();
   const rows = await sql<ScoreRow>`
     select id, nick, tiles_left, moves, mispicks, elapsed_sec, mode
     from scores
-    order by
-      case mode
-        when 'normal' then 0
-        when 'timed' then 1
-        when 'm20' then 2
-        when 'm10' then 3
-        else 4
-      end,
-      tiles_left asc,
-      elapsed_sec asc,
-      mispicks asc,
-      moves asc,
-      created_at asc
+    order by tiles_left asc, elapsed_sec asc, mispicks asc, moves asc, created_at asc
   `;
-  const next: Boards = { normal: [], timed: [], m20: [], m10: [], m5: [] };
+  const next = emptyBoards();
+  const all: Score[] = [];
   for (const row of rows) {
     const score = mapRow(row);
-    if (!score) continue;
-    const list = next[score.mode];
-    if (list.length < 8) list.push(score);
+    if (score) all.push(score);
   }
+  for (const mode of MODES) next[mode] = all.filter((score) => score.mode === mode).sort(byRank).slice(0, 8);
   return next;
 }
 
-export const listScores = createServerFn({ method: "GET" }).handler(async () => boards());
+async function remoteGet(key: string) {
+  const res = await fetch(`https://keyvalue.immanuel.co/api/KeyVal/GetValue/${STORE}/${key}`, {
+    headers: { "Content-Length": "0" },
+  });
+  if (!res.ok) throw new Error("The board could not be reached.");
+  const text = (await res.text()).trim();
+  if (!text || text === '""') return "";
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    return typeof parsed === "string" ? parsed : "";
+  } catch {
+    throw new Error("The board could not be reached.");
+  }
+}
+
+function parseList(mode: PlayMode, raw: string): Score[] {
+  if (!raw) return [];
+  return raw.split(";").flatMap((part, index) => {
+    const [nick, tiles, moves, slips, elapsed] = part.split("|");
+    if (!nick) return [];
+    return [
+      {
+        id: index + 1,
+        nick,
+        tilesLeft: Number(tiles) || 0,
+        moves: Number(moves) || 0,
+        mispicks: Number(slips) || 0,
+        elapsedSec: Number(elapsed) || 0,
+        mode,
+      },
+    ];
+  });
+}
+
+function pack(rows: Score[]) {
+  let raw = "";
+  for (const row of rows) {
+    const line = `${row.nick}|${row.tilesLeft}|${row.moves}|${row.mispicks}|${row.elapsedSec}`;
+    const next = raw ? `${raw};${line}` : line;
+    if (encodeURIComponent(next).length > 200) break;
+    raw = next;
+  }
+  return raw;
+}
+
+async function remoteSet(key: string, value: string) {
+  const res = await fetch(
+    `https://keyvalue.immanuel.co/api/KeyVal/UpdateValue/${STORE}/${key}/${encodeURIComponent(value)}`,
+    { method: "POST", headers: { "Content-Length": "0" } },
+  );
+  if (!res.ok || (await res.text()).trim() !== "true") throw new Error("The board could not be reached.");
+}
+
+async function remoteBoards(): Promise<Boards> {
+  const next = emptyBoards();
+  await Promise.all(
+    MODES.map(async (mode) => {
+      next[mode] = parseList(mode, await remoteGet(MODE_KEY[mode]));
+    }),
+  );
+  return next;
+}
+
+async function remoteInsert(data: {
+  nick: string;
+  tilesLeft: number;
+  moves: number;
+  mispicks: number;
+  elapsedSec: number;
+  mode: PlayMode;
+}) {
+  const current = parseList(data.mode, await remoteGet(MODE_KEY[data.mode]));
+  const ranked = [...current, { id: 0, ...data }].sort(byRank).slice(0, 8);
+  await remoteSet(MODE_KEY[data.mode], pack(ranked));
+  return remoteBoards();
+}
+
+function useHostedDb() {
+  return Boolean(process.env.DATABASE_URL?.trim());
+}
+
+export const listScores = createServerFn({ method: "GET" }).handler(async () =>
+  useHostedDb() ? sqlBoards() : remoteBoards(),
+);
 
 export const submitScore = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
@@ -108,10 +196,19 @@ export const submitScore = createServerFn({ method: "POST" })
     };
   })
   .handler(async ({ data }) => {
-    const sql = await getSql();
-    await sql`
-      insert into scores (nick, tiles_left, moves, mispicks, elapsed_sec, mode)
-      values (${data.nick}, ${data.tilesLeft}, ${data.moves}, ${data.mispicks}, ${data.elapsedSec}, ${data.mode})
-    `;
-    return boards();
+    if (useHostedDb()) {
+      const { getSql } = await import("@/lib/db");
+      const sql = await getSql();
+      await sql`
+        insert into scores (nick, tiles_left, moves, mispicks, elapsed_sec, mode)
+        values (${data.nick}, ${data.tilesLeft}, ${data.moves}, ${data.mispicks}, ${data.elapsedSec}, ${data.mode})
+      `;
+      return sqlBoards();
+    }
+    try {
+      return await remoteInsert(data);
+    } catch (err) {
+      if (err instanceof Error && (err.message.startsWith("The board") || err.message.startsWith("That "))) throw err;
+      throw new Error("The board could not be reached.");
+    }
   });
