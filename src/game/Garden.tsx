@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import gardenUrl from "@/assets/garden.jpg";
 import { play, resumeAudio, setSoundEnabled, unlockAudio } from "@/game/audio";
+import { Pond } from "@/game/Pond";
 import { TileFace } from "@/game/faces";
 import {
   cloneTiles,
@@ -27,8 +28,9 @@ import { BOARD_H, BOARD_W, TILE_H, TILE_W, tilePosition } from "@/game/metrics";
 import { readSave, writeSave } from "@/game/save";
 
 type Snap = { tiles: Tile[]; moves: number; mispicks: number; clears: number };
-type Ghost = { key: string; face: number; left: number; top: number; z: number };
-type Spark = { id: number; x: number; y: number; dx: number; dy: number; color: string };
+type Ghost = { key: string; face: number; left: number; top: number; z: number; spin: number };
+type Spark = { id: number; x: number; y: number; dx: number; dy: number; color: string; big: boolean };
+type Ring = { id: number; x: number; y: number; jade: boolean };
 
 const SPARK_COLORS = ["bg-gold", "bg-jade", "bg-seal", "bg-ivory"];
 
@@ -49,6 +51,7 @@ export function Garden() {
   const [reduceMotion, setReduceMotion] = useState(false);
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [sparks, setSparks] = useState<Spark[]>([]);
+  const [rings, setRings] = useState<Ring[]>([]);
   const [shake, setShake] = useState(false);
   const [trailerOpen, setTrailerOpen] = useState(false);
 
@@ -199,38 +202,51 @@ export function Garden() {
   function burst(pair: Tile[]) {
     if (reduceRef.current) return;
     const born: Spark[] = [];
+    const waves: Ring[] = [];
     pair.forEach((t, ti) => {
       const p = tilePosition(t);
       const x = p.left + TILE_W / 2;
       const y = p.top + TILE_H / 2;
-      for (let i = 0; i < 8; i++) {
-        const a = (Math.PI * 2 * i) / 8 + ti * 0.4;
-        const dist = 26 + (i % 3) * 12;
+      waves.push({ id: sparkSeq.current++, x, y, jade: false }, { id: sparkSeq.current++, x, y, jade: true });
+      for (let i = 0; i < 14; i++) {
+        const a = (Math.PI * 2 * i) / 14 + ti * 0.35;
+        const dist = 28 + (i % 5) * 14;
         born.push({
           id: sparkSeq.current++,
           x,
           y,
           dx: Math.cos(a) * dist,
-          dy: Math.sin(a) * dist - 12,
+          dy: Math.sin(a) * dist * 0.72 - (16 + (i % 4) * 10),
           color: SPARK_COLORS[i % SPARK_COLORS.length],
+          big: i % 3 === 0,
         });
       }
     });
     setSparks((s) => [...s, ...born]);
+    setRings((r) => [...r, ...waves]);
     const ids = new Set(born.map((s) => s.id));
-    later(() => setSparks((s) => s.filter((sp) => !ids.has(sp.id))), 680);
+    const ringIds = new Set(waves.map((r) => r.id));
+    later(() => setSparks((s) => s.filter((sp) => !ids.has(sp.id))), 860);
+    later(() => setRings((r) => r.filter((ring) => !ringIds.has(ring.id))), 780);
     setShake(true);
-    later(() => setShake(false), 300);
+    later(() => setShake(false), 420);
   }
 
   function depart(pair: Tile[]) {
-    const born = pair.map((t) => {
+    const born = pair.map((t, i) => {
       const p = tilePosition(t);
-      return { key: `${t.id}-${sparkSeq.current++}`, face: t.face, left: p.left, top: p.top, z: t.z };
+      return {
+        key: `${t.id}-${sparkSeq.current++}`,
+        face: t.face,
+        left: p.left,
+        top: p.top,
+        z: t.z,
+        spin: i === 0 ? -1 : 1,
+      };
     });
     setGhosts((g) => [...g, ...born]);
     const keys = new Set(born.map((g) => g.key));
-    later(() => setGhosts((g) => g.filter((ghost) => !keys.has(ghost.key))), 460);
+    later(() => setGhosts((g) => g.filter((ghost) => !keys.has(ghost.key))), 760);
   }
 
   function noteAfter(next: Tile[]) {
@@ -417,6 +433,8 @@ export function Garden() {
     <div className="garden-sky">
       <img src={gardenUrl} alt="" className="garden-photo" />
       <div className="garden-shade" />
+      <div className="garden-motes" aria-hidden="true" />
+      <Pond />
       <div className="garden-petals" aria-hidden="true">
         {Array.from({ length: 12 }, (_, i) => (
           <span
@@ -486,11 +504,12 @@ export function Garden() {
         <section ref={stageRef} className="garden-stage" aria-label="Mahjong tile board">
           <div className="garden-scroll">
             <div style={{ width: bounds.w * scale, height: bounds.h * scale }}>
-              <div className="mj-tray" style={{ width: bounds.w, height: bounds.h, transform: `scale(${scale})` }}>
+              <div className={shake && !reduceMotion ? "mj-tray is-lit" : "mj-tray"} style={{ width: bounds.w, height: bounds.h, transform: `scale(${scale})` }}>
+                <div className="mj-perspective">
+                  <div className="mj-tilt">
                 <div
                   ref={boardRef}
-                  className={shake && !reduceMotion ? "mj-shake" : undefined}
-                  style={{ position: "relative", width: "100%", height: "100%" }}
+                  className={shake && !reduceMotion ? "mj-plane mj-shake" : "mj-plane"}
                   onKeyDown={onBoardKey}
                 >
                   {!tiles && (
@@ -539,15 +558,22 @@ export function Garden() {
                       key={g.key}
                       className="mj-tile mj-ghost"
                       data-z={g.z}
-                      style={{ left: g.left, top: g.top, zIndex: 7000 + g.z }}
+                      style={{ left: g.left, top: g.top, zIndex: 7000 + g.z, "--spin": g.spin } as CSSProperties}
                     >
                       <TileFace face={g.face} />
                     </div>
                   ))}
+                  {rings.map((ring) => (
+                    <span
+                      key={ring.id}
+                      className={ring.jade ? "mj-ring is-jade" : "mj-ring"}
+                      style={{ left: ring.x, top: ring.y }}
+                    />
+                  ))}
                   {sparks.map((s) => (
                     <span
                       key={s.id}
-                      className={`mj-spark ${s.color}`}
+                      className={s.big ? `mj-spark is-big ${s.color}` : `mj-spark ${s.color}`}
                       style={
                         {
                           left: s.x,
@@ -558,6 +584,8 @@ export function Garden() {
                       }
                     />
                   ))}
+                </div>
+                  </div>
                 </div>
               </div>
             </div>
