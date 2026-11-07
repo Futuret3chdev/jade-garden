@@ -1,18 +1,62 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useServerFn } from "@tanstack/react-start";
-import { listScores, submitScore, type Score } from "@/game/scores";
+import { formatClock, MODE_LABEL, type PlayMode } from "@/game/modes";
+import { listScores, submitScore, type Boards, type Score } from "@/game/scores";
 import { xIntent } from "@/game/share";
 
-export function Standings({ refresh }: { refresh: number }) {
-  const [rows, setRows] = useState<Score[]>([]);
+type BoardTab = "normal" | "timed" | "challenge";
+
+const TABS: { id: BoardTab; label: string }[] = [
+  { id: "normal", label: "Normal" },
+  { id: "timed", label: "Timed" },
+  { id: "challenge", label: "Challenges" },
+];
+
+function tabFor(mode: PlayMode): BoardTab {
+  if (mode === "timed") return "timed";
+  if (mode === "normal") return "normal";
+  return "challenge";
+}
+
+function Result({ row, timed }: { row: Score; timed: boolean }) {
+  const cleared = row.tilesLeft === 0;
+  return (
+    <span className="standings-result">
+      {timed ? formatClock(row.elapsedSec) : cleared ? "Cleared" : `${row.tilesLeft} left`}
+      <small>
+        {timed ? (cleared ? "cleared" : `${row.tilesLeft} left`) : `${row.moves} moves`}
+        {row.mispicks ? ` · ${row.mispicks} slips` : ""}
+      </small>
+    </span>
+  );
+}
+
+function Rows({ rows, timed, empty }: { rows: Score[]; timed: boolean; empty: string }) {
+  if (rows.length === 0) return <p className="standings-empty">{empty}</p>;
+  return (
+    <ol>
+      {rows.map((row, index) => (
+        <li key={row.id}>
+          <span className="standings-rank">{index + 1}</span>
+          <span className="standings-nick">{row.nick}</span>
+          <Result row={row} timed={timed} />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+export function Standings({ refresh, mode }: { refresh: number; mode: PlayMode }) {
+  const [boards, setBoards] = useState<Boards | null>(null);
   const [quiet, setQuiet] = useState(false);
+  const [tab, setTab] = useState<BoardTab>("normal");
 
   useEffect(() => {
     let live = true;
     listScores()
       .then((next) => {
         if (!live) return;
-        setRows(next);
+        setBoards(next);
         setQuiet(false);
       })
       .catch(() => {
@@ -23,6 +67,11 @@ export function Standings({ refresh }: { refresh: number }) {
     };
   }, [refresh]);
 
+  useEffect(() => {
+    if (refresh === 0) return;
+    setTab(tabFor(mode));
+  }, [refresh, mode]);
+
   return (
     <section className="standings" aria-label="Leaderboard">
       <div className="standings-head">
@@ -31,26 +80,37 @@ export function Standings({ refresh }: { refresh: number }) {
           Share on X
         </a>
       </div>
+      <div className="board-tabs" role="tablist" aria-label="Score boards">
+        {TABS.map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            role="tab"
+            aria-selected={tab === item.id}
+            className={tab === item.id ? "board-tab is-on" : "board-tab"}
+            onClick={() => setTab(item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
       {quiet ? (
         <p className="standings-empty">The board is quiet for a moment. Try again shortly.</p>
-      ) : rows.length === 0 ? (
-        <p className="standings-empty">No names yet. When a path closes, leave yours.</p>
-      ) : (
-        <ol>
-          {rows.map((row, index) => (
-            <li key={row.id}>
-              <span className="standings-rank">{index + 1}</span>
-              <span className="standings-nick">{row.nick}</span>
-              <span className="standings-result">
-                {row.tilesLeft === 0 ? "Cleared" : `${row.tilesLeft} left`}
-                <small>
-                  {row.moves} moves
-                  {row.mispicks ? ` · ${row.mispicks} slips` : ""}
-                </small>
-              </span>
-            </li>
+      ) : tab === "challenge" ? (
+        <div className="challenge-boards">
+          {(["m20", "m10", "m5"] as const).map((key) => (
+            <div key={key}>
+              <h3>{MODE_LABEL[key]}</h3>
+              <Rows rows={boards?.[key] ?? []} timed empty={`No ${MODE_LABEL[key]} names yet.`} />
+            </div>
           ))}
-        </ol>
+        </div>
+      ) : (
+        <Rows
+          rows={boards?.[tab] ?? []}
+          timed={tab === "timed"}
+          empty={tab === "timed" ? "No timed names yet. Start the clock and leave yours." : "No names yet. When a path closes, leave yours."}
+        />
       )}
     </section>
   );
@@ -60,12 +120,16 @@ export function NickGate({
   tilesLeft,
   moves,
   mispicks,
+  elapsedSec,
+  mode,
   heading,
   onPosted,
 }: {
   tilesLeft: number;
   moves: number;
   mispicks: number;
+  elapsedSec: number;
+  mode: PlayMode;
   heading: string;
   onPosted: (nick: string) => void;
 }) {
@@ -79,7 +143,7 @@ export function NickGate({
     setBusy(true);
     setError("");
     try {
-      await sendScore({ data: { nick, tilesLeft, moves, mispicks } });
+      await sendScore({ data: { nick, tilesLeft, moves, mispicks, elapsedSec, mode } });
       onPosted(nick.trim());
     } catch {
       setError("That name did not land. Try a shorter one.");

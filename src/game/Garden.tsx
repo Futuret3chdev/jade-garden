@@ -25,6 +25,7 @@ import {
   type Tile,
 } from "@/game/logic";
 import { BOARD_H, BOARD_W, TILE_H, TILE_W, tilePosition } from "@/game/metrics";
+import { challengeLimit, formatClock, MODE_LABEL, PLAY_MODES, type PlayMode } from "@/game/modes";
 import { readSave, writeSave } from "@/game/save";
 import { NickGate, Standings } from "@/game/Standings";
 import { xIntent } from "@/game/share";
@@ -60,6 +61,10 @@ export function Garden() {
   const [posted, setPosted] = useState(false);
   const [boardTick, setBoardTick] = useState(0);
   const [signedName, setSignedName] = useState("");
+  const [mode, setMode] = useState<PlayMode>("normal");
+  const [elapsed, setElapsed] = useState(0);
+  const [leave, setLeave] = useState<null | { next: "restart" } | { next: "fresh" } | { next: "mode"; mode: PlayMode }>(null);
+  const startRef = useRef<number | null>(null);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -117,15 +122,28 @@ export function Garden() {
     setClears(keepClears);
     const restorable = saved?.tiles?.some((t) => !t.removed) && saved.original;
     if (saved && restorable) {
+      const savedMode = saved.mode;
+      const elapsed0 = savedMode === "normal" ? 0 : saved.elapsed;
+      const limit = challengeLimit(savedMode);
+      setMode(savedMode);
       setTiles(saved.tiles);
       setOriginal(saved.original);
       setMoves(saved.moves);
       setMispicks(saved.mispicks);
+      if (savedMode !== "normal" && (limit == null || elapsed0 < limit)) {
+        startRef.current = Date.now() - elapsed0 * 1000;
+        setElapsed(elapsed0);
+      } else if (limit != null) {
+        startRef.current = null;
+        setElapsed(limit);
+      }
       const open = freePairs(saved.tiles);
       setMessage(
-        open.length
-          ? "Your garden is as you left it."
-          : "No moves remain. Shuffle to rearrange the remaining pairs, or restart.",
+        limit != null && elapsed0 >= limit
+          ? "Time is up. Leave your name, or deal again."
+          : open.length
+            ? "Your garden is as you left it."
+            : "No moves remain. Shuffle to rearrange the remaining pairs, or restart.",
       );
     } else {
       const deal = newDeal();
@@ -177,8 +195,8 @@ export function Garden() {
 
   useEffect(() => {
     if (!ready || !tiles || !original) return;
-    writeSave({ v: 1, tiles, original, moves, mispicks, clears, sound });
-  }, [ready, tiles, original, moves, mispicks, clears, sound]);
+    writeSave({ v: 1, tiles, original, moves, mispicks, clears, sound, mode, elapsed });
+  }, [ready, tiles, original, moves, mispicks, clears, sound, mode, elapsed]);
 
   useEffect(() => {
     if (!focusFree.current) return;
@@ -196,6 +214,27 @@ export function Garden() {
   const remaining = tiles ? tiles.filter((t) => !t.removed).length : null;
   const won = remaining === 0;
   const stuck = !!tiles && !won && freePairs(tiles).length === 0;
+  const limit = challengeLimit(mode);
+  const timeUp = limit != null && !won && elapsed >= limit;
+  const clock = mode === "normal" ? null : timeUp || limit == null ? elapsed : Math.max(0, limit - elapsed);
+
+  useEffect(() => {
+    if (!ready || mode === "normal" || startRef.current == null || won) return;
+    const cap = challengeLimit(mode);
+    const id = window.setInterval(() => {
+      const start = startRef.current;
+      if (start == null) return;
+      const raw = Math.floor((Date.now() - start) / 1000);
+      if (cap != null && raw >= cap) {
+        startRef.current = null;
+        setElapsed(cap);
+        setMessage("Time is up. Leave your name, or deal again.");
+        return;
+      }
+      setElapsed(raw);
+    }, 1000);
+    return () => window.clearInterval(id);
+  }, [ready, mode, won]);
 
   function onPosted(nick: string) {
     setPosted(true);
@@ -284,8 +323,13 @@ export function Garden() {
   }
 
   function onChoose(id: number) {
-    if (!tiles) return;
+    if (!tiles || leave) return;
     unlockAudio();
+    if (timeUp) {
+      setMessage("Time is up. Leave your name, or deal again.");
+      play("block");
+      return;
+    }
     const tile = tiles.find((t) => t.id === id);
     if (!tile || tile.removed) return;
     if (!freeIds.has(id)) {
@@ -331,7 +375,7 @@ export function Garden() {
   }
 
   function onHint() {
-    if (!tiles || won) return;
+    if (!tiles || won || timeUp || leave) return;
     unlockAudio();
     const pairs = freePairs(tiles);
     const pair = pairs[0];
@@ -348,6 +392,7 @@ export function Garden() {
   }
 
   function onUndo() {
+    if (timeUp || leave) return;
     const snap = history[history.length - 1];
     if (!snap) return;
     unlockAudio();
@@ -363,7 +408,7 @@ export function Garden() {
   }
 
   function onShuffle() {
-    if (!tiles || won) return;
+    if (!tiles || won || timeUp || leave) return;
     unlockAudio();
     try {
       const next = shuffleRemaining(tiles);
@@ -383,35 +428,83 @@ export function Garden() {
     }
   }
 
-  function onRestart() {
-    if (!original) return;
-    unlockAudio();
-    setTiles(cloneTiles(original));
+  function runHasProgress() {
+    if (posted || !tiles) return false;
+    return timeUp || moves > 0 || mispicks > 0 || tiles.some((tile) => tile.removed);
+  }
+
+  function freezeClock() {
+    if (startRef.current == null) return;
+    const raw = Math.floor((Date.now() - startRef.current) / 1000);
+    const cap = challengeLimit(mode);
+    startRef.current = null;
+    setElapsed(cap == null ? raw : Math.min(raw, cap));
+  }
+
+  function commitLeave(action: { next: "restart" } | { next: "fresh" } | { next: "mode"; mode: PlayMode }) {
+    const nextMode = action.next === "mode" ? action.mode : mode;
+    const restarting = action.next === "restart";
+    const source = restarting && original ? cloneTiles(original) : newDeal().tiles;
+    setMode(nextMode);
+    setTiles(source);
+    if (!restarting) setOriginal(cloneTiles(source));
     setSelected(null);
     setHinted([]);
     setHistory([]);
     setMoves(0);
     setMispicks(0);
-    setMessage("Original deal restored. A fresh start.");
     setPosted(false);
     setSignedName("");
+    setLeave(null);
+    setElapsed(0);
+    startRef.current = nextMode === "normal" ? null : Date.now();
+    if (restarting) {
+      setMessage(nextMode === "normal" ? "Original deal restored. A fresh start." : "Same garden. The clock starts again.");
+    } else if (nextMode === "timed") {
+      setMessage("The clock is counting. Clear the garden.");
+    } else if (nextMode === "normal") {
+      setMessage("A fresh, solvable deal. Take your time.");
+    } else {
+      setMessage(`Clear it before ${MODE_LABEL[nextMode]} runs out.`);
+    }
+  }
+
+  function requestLeave(action: { next: "restart" } | { next: "fresh" } | { next: "mode"; mode: PlayMode }) {
+    if (runHasProgress()) {
+      freezeClock();
+      setLeave(action);
+      setMessage("Leave this run on the board, or skip it.");
+      play("ui");
+      return;
+    }
+    commitLeave(action);
     play("ui");
   }
 
-  function onFresh() {
+  function onRestart() {
+    if (!original || leave) return;
     unlockAudio();
-    const deal = newDeal();
-    setTiles(deal.tiles);
-    setOriginal(cloneTiles(deal.tiles));
-    setSelected(null);
-    setHinted([]);
-    setHistory([]);
-    setMoves(0);
-    setMispicks(0);
-    setMessage("A fresh, solvable deal. Take your time.");
-    setPosted(false);
-    setSignedName("");
-    play("ui");
+    requestLeave({ next: "restart" });
+  }
+
+  function onFresh() {
+    if (leave) return;
+    unlockAudio();
+    requestLeave({ next: "fresh" });
+  }
+
+  function onPickMode(next: PlayMode) {
+    if (next === mode || leave) return;
+    unlockAudio();
+    requestLeave({ next: "mode", mode: next });
+  }
+
+  function onLeavePosted(nick: string) {
+    const action = leave;
+    if (!action) return;
+    setBoardTick((tick) => tick + 1);
+    commitLeave(action);
+    setMessage(`${nick} is on the board.`);
   }
 
   api.current = { hint: onHint, undo: onUndo, shuffle: onShuffle, restart: onRestart, fresh: onFresh };
@@ -481,26 +574,53 @@ export function Garden() {
             <h1 className="garden-title">Jade Garden</h1>
             <p className="lede">Match. Uncover. Unwind.</p>
           </div>
-          <div className="score-pill">
-            <strong>{remaining ?? "—"}</strong>
-            <span>tiles left</span>
-            <span>
-              {clears} cleared
-              {mispicks > 0 ? ` · ${mispicks} slips` : ""}
-            </span>
+          <div className={timeUp ? "score-pill is-out" : "score-pill"}>
+            {clock != null ? (
+              <>
+                <strong className={limit != null && !timeUp && clock <= 60 ? "is-low" : undefined}>{formatClock(clock)}</strong>
+                <span>{limit == null ? "on the clock" : "remaining"}</span>
+                <span>
+                  {remaining ?? "—"} tiles
+                  {mispicks > 0 ? ` · ${mispicks} slips` : ""}
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>{remaining ?? "—"}</strong>
+                <span>tiles left</span>
+                <span>
+                  {clears} cleared
+                  {mispicks > 0 ? ` · ${mispicks} slips` : ""}
+                </span>
+              </>
+            )}
           </div>
         </header>
 
+        <div className="mode-row" role="group" aria-label="Play mode">
+          {PLAY_MODES.map((item) => (
+            <button
+              key={item}
+              type="button"
+              className={mode === item ? "mode-btn is-on" : "mode-btn"}
+              aria-pressed={mode === item}
+              onClick={() => onPickMode(item)}
+            >
+              {MODE_LABEL[item]}
+            </button>
+          ))}
+        </div>
+
         <nav className="garden-dock" aria-label="Game controls">
-          <button type="button" className="dock-btn" onClick={onHint} disabled={!tiles || won}>
+          <button type="button" className="dock-btn" onClick={onHint} disabled={!tiles || won || timeUp || !!leave}>
             <Sparkles aria-hidden className="dock-ico text-gold" />
             <span>Hint</span>
           </button>
-          <button type="button" className="dock-btn" onClick={onUndo} disabled={history.length === 0}>
+          <button type="button" className="dock-btn" onClick={onUndo} disabled={history.length === 0 || timeUp || !!leave}>
             <Undo2 aria-hidden className="dock-ico" />
             <span>Undo</span>
           </button>
-          <button type="button" className="dock-btn" onClick={onShuffle} disabled={!tiles || won}>
+          <button type="button" className="dock-btn" onClick={onShuffle} disabled={!tiles || won || timeUp || !!leave}>
             <Shuffle aria-hidden className="dock-ico" />
             <span>Shuffle</span>
           </button>
@@ -530,16 +650,35 @@ export function Garden() {
           {message}
         </p>
 
-        {stuck && !posted ? (
+        {leave ? (
+          <div className="resign-card">
+            <NickGate
+              tilesLeft={remaining ?? 0}
+              moves={moves}
+              mispicks={mispicks}
+              elapsedSec={elapsed}
+              mode={mode}
+              heading="Save this run?"
+              onPosted={onLeavePosted}
+            />
+            <button type="button" className="garden-btn" onClick={() => leave && commitLeave(leave)}>
+              Skip
+            </button>
+          </div>
+        ) : null}
+
+        {(stuck || timeUp) && !posted && !leave ? (
           <NickGate
             tilesLeft={remaining ?? 0}
             moves={moves}
             mispicks={mispicks}
-            heading="The path closed"
+            elapsedSec={elapsed}
+            mode={mode}
+            heading={timeUp ? "Time is up" : "The path closed"}
             onPosted={onPosted}
           />
         ) : null}
-        {stuck && posted ? (
+        {(stuck || timeUp) && posted && !leave ? (
           <p className="nick-done">
             {signedName} is on the board.{" "}
             <a href={xIntent(`${signedName} left ${remaining} tiles in Jade Garden.`)} target="_blank" rel="noopener noreferrer">
@@ -650,12 +789,28 @@ export function Garden() {
                 {posted ? (
                   <p className="nick-done">
                     {signedName} cleared the garden.{" "}
-                    <a href={xIntent(`${signedName} cleared Jade Garden in ${moves} moves.`)} target="_blank" rel="noopener noreferrer">
+                    <a
+                      href={xIntent(
+                        mode === "normal"
+                          ? `${signedName} cleared Jade Garden in ${moves} moves.`
+                          : `${signedName} cleared Jade Garden in ${formatClock(elapsed)}.`,
+                      )}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
                       Tell X
                     </a>
                   </p>
                 ) : (
-                  <NickGate tilesLeft={0} moves={moves} mispicks={mispicks} heading="Leave your name" onPosted={onPosted} />
+                  <NickGate
+                    tilesLeft={0}
+                    moves={moves}
+                    mispicks={mispicks}
+                    elapsedSec={elapsed}
+                    mode={mode}
+                    heading="Leave your name"
+                    onPosted={onPosted}
+                  />
                 )}
                 <button type="button" className="garden-btn is-primary mt-4" onClick={onFresh}>
                   New game
@@ -666,7 +821,7 @@ export function Garden() {
         </section>
         {overflows && <p className="scroll-hint">Swipe sideways if a tile sits past the edge.</p>}
 
-        <Standings refresh={boardTick} />
+        <Standings refresh={boardTick} mode={mode} />
 
         <div className="rules-wrap">
           <button
@@ -687,7 +842,8 @@ export function Garden() {
               <p>
                 <strong>Take your time</strong>
                 Hint outlines a pair. Shuffle keeps the tiles you still have and guarantees a way through. Restart
-                restores the original deal. Undo lifts the last match.
+                asks you to save the run or skip it, then restores the original deal. Timed counts up. The 20, 10, and
+                5 minute challenges must be cleared before the sand runs out.
               </p>
               <p>
                 <strong>Keys</strong>

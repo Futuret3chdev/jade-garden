@@ -1,4 +1,5 @@
 import type { Tile } from "@/game/logic";
+import { isPlayMode, type PlayMode } from "@/game/modes";
 
 export type Save = {
   v: 1;
@@ -8,6 +9,8 @@ export type Save = {
   mispicks: number;
   clears: number;
   sound: boolean;
+  mode: PlayMode;
+  elapsed: number;
 };
 
 const KEY = "jade-garden-v1";
@@ -40,6 +43,8 @@ export function readSave(): Save | null {
       mispicks: Number(data.mispicks) || 0,
       clears: Number(data.clears) || 0,
       sound: data.sound !== false,
+      mode: isPlayMode(data.mode) ? data.mode : "normal",
+      elapsed: Number(data.elapsed) || 0,
     };
   } catch {
     return null;

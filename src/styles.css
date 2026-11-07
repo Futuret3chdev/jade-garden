@@ -863,6 +863,67 @@
   }
 }
 
+.score-pill strong.is-low,
+.score-pill.is-out strong {
+  color: #e7b15a;
+}
+
+.mode-row,
+.board-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+}
+
+.board-tabs {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 0.15rem;
+  margin-bottom: 0.45rem;
+}
+
+.mode-btn,
+.board-tab {
+  min-height: 44px;
+  padding: 0.35rem 0.2rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--color-gold) 32%, transparent);
+  background: color-mix(in srgb, #06141a 72%, transparent);
+  color: var(--color-ivory);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.mode-btn.is-on,
+.board-tab.is-on {
+  background: var(--color-gold);
+  color: var(--color-ink);
+  border-color: var(--color-gold);
+}
+
+.mode-btn:focus-visible,
+.board-tab:focus-visible {
+  outline: 3px solid var(--color-gold);
+  outline-offset: 2px;
+}
+
+.resign-card {
+  margin: 0.2rem 0 0.8rem;
+}
+
+.resign-card .garden-btn {
+  margin-top: 0.55rem;
+}
+
+.challenge-boards h3 {
+  margin: 0.65rem 0 0;
+  color: var(--color-gold);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .scroll-hint {
   margin: 0.45rem 0 0;
   color: var(--color-mist);
