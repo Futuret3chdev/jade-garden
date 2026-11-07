@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import {
+  Play,
+  Plus,
   RotateCcw,
   Shuffle,
   Sparkles,
@@ -48,6 +50,7 @@ export function Garden() {
   const [ghosts, setGhosts] = useState<Ghost[]>([]);
   const [sparks, setSparks] = useState<Spark[]>([]);
   const [shake, setShake] = useState(false);
+  const [trailerOpen, setTrailerOpen] = useState(false);
 
   const stageRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -64,6 +67,15 @@ export function Garden() {
     restart: () => {},
     fresh: () => {},
   });
+
+  useEffect(() => {
+    if (!trailerOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setTrailerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [trailerOpen]);
 
   useLayoutEffect(() => {
     const el = stageRef.current;
@@ -415,54 +427,55 @@ export function Garden() {
         ))}
       </div>
 
-      <main className="relative mx-auto w-full max-w-5xl px-4 py-7 sm:px-6">
-        <header className="flex flex-wrap items-end justify-between gap-5">
-          <div>
+      <main className="relative mx-auto w-full max-w-5xl px-4 py-5 sm:px-6 sm:py-7">
+        <header className="garden-head">
+          <div className="min-w-0">
             <p className="eyebrow">A quiet moment of play</p>
             <h1 className="garden-title">Jade Garden</h1>
-            <p className="lede">Mahjong Solitaire · Match. Uncover. Unwind.</p>
+            <p className="lede">Match. Uncover. Unwind.</p>
           </div>
-          <div className="text-right">
-            <strong className="counter-num">{remaining ?? "—"}</strong>
-            <span className="counter-label">tiles remaining</span>
-            <span className="counter-meta">
-              {clears} {clears === 1 ? "garden" : "gardens"} cleared
-              {mispicks > 0 ? ` · ${mispicks} mis-picks` : ""}
+          <div className="score-pill">
+            <strong>{remaining ?? "—"}</strong>
+            <span>tiles left</span>
+            <span>
+              {clears} cleared
+              {mispicks > 0 ? ` · ${mispicks} slips` : ""}
             </span>
           </div>
         </header>
 
-        <nav className="mt-6 flex flex-wrap gap-2" aria-label="Game controls">
-          <button type="button" className="garden-btn" onClick={onHint} disabled={!tiles || won}>
-            <Sparkles aria-hidden className="size-4 text-gold" />
-            Hint
+        <nav className="garden-dock" aria-label="Game controls">
+          <button type="button" className="dock-btn" onClick={onHint} disabled={!tiles || won}>
+            <Sparkles aria-hidden className="dock-ico text-gold" />
+            <span>Hint</span>
           </button>
-          <button type="button" className="garden-btn" onClick={onUndo} disabled={history.length === 0}>
-            <Undo2 aria-hidden className="size-4" />
-            Undo
+          <button type="button" className="dock-btn" onClick={onUndo} disabled={history.length === 0}>
+            <Undo2 aria-hidden className="dock-ico" />
+            <span>Undo</span>
           </button>
-          <button type="button" className="garden-btn" onClick={onShuffle} disabled={!tiles || won}>
-            <Shuffle aria-hidden className="size-4" />
-            Shuffle
+          <button type="button" className="dock-btn" onClick={onShuffle} disabled={!tiles || won}>
+            <Shuffle aria-hidden className="dock-ico" />
+            <span>Shuffle</span>
           </button>
-          <button type="button" className="garden-btn" onClick={onRestart} disabled={!original}>
-            <RotateCcw aria-hidden className="size-4" />
-            Restart
+          <button type="button" className="dock-btn" onClick={onRestart} disabled={!original}>
+            <RotateCcw aria-hidden className="dock-ico" />
+            <span>Restart</span>
           </button>
-          <button type="button" className="garden-btn is-primary" onClick={onFresh}>
-            New game
+          <button type="button" className="dock-btn is-primary" onClick={onFresh}>
+            <Plus aria-hidden className="dock-ico" />
+            <span>New</span>
           </button>
-          <button
-            type="button"
-            className="garden-btn"
-            onClick={() => setZoom((z) => (z === "fit" ? "play" : "fit"))}
-          >
-            {zoom === "fit" ? <ZoomIn aria-hidden className="size-4" /> : <ZoomOut aria-hidden className="size-4" />}
-            {zoom === "fit" ? "Larger tiles" : "Show all"}
+          <button type="button" className="dock-btn" onClick={() => setZoom((z) => (z === "fit" ? "play" : "fit"))}>
+            {zoom === "fit" ? <ZoomIn aria-hidden className="dock-ico" /> : <ZoomOut aria-hidden className="dock-ico" />}
+            <span>{zoom === "fit" ? "Bigger" : "Fit"}</span>
           </button>
-          <button type="button" className="garden-btn" onClick={toggleSound} aria-pressed={sound}>
-            {sound ? <Volume2 aria-hidden className="size-4" /> : <VolumeX aria-hidden className="size-4" />}
-            {sound ? "Sound on" : "Sound off"}
+          <button type="button" className="dock-btn" onClick={toggleSound} aria-pressed={sound}>
+            {sound ? <Volume2 aria-hidden className="dock-ico" /> : <VolumeX aria-hidden className="dock-ico" />}
+            <span>{sound ? "Sound" : "Muted"}</span>
+          </button>
+          <button type="button" className="dock-btn" onClick={() => setTrailerOpen(true)}>
+            <Play aria-hidden className="dock-ico" />
+            <span>Trailer</span>
           </button>
         </nav>
 
@@ -592,6 +605,25 @@ export function Garden() {
           </a>
         </footer>
       </main>
+      {trailerOpen && (
+        <div className="trailer-scrim" onClick={() => setTrailerOpen(false)}>
+          <div
+            className="trailer-card"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Jade Garden trailer"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <video src="/trailer.mp4" controls autoPlay playsInline />
+            <div className="trailer-bar">
+              <p>A minute in the garden</p>
+              <button type="button" className="garden-btn" onClick={() => setTrailerOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
